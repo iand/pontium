@@ -88,7 +88,7 @@ func (ih *Handler) Handle(_ context.Context, r slog.Record) error {
 		}
 		b.WriteString(" ")
 		if !ih.nocolor {
-			b.WriteString(colorYellow)
+			b.WriteString(colorBlue)
 		}
 		b.WriteString(a.Key)
 		if !ih.nocolor {
