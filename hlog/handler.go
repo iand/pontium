@@ -3,7 +3,10 @@ package hlog
 import (
 	"context"
 	"fmt"
+	"math"
+	"strconv"
 	"strings"
+	"time"
 
 	"golang.org/x/exp/slog"
 )
@@ -196,7 +199,32 @@ func (ih *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
 		b.WriteString(colorReset)
 	}
 	b.WriteString("=")
-	b.WriteString(quote(a.Value.String()))
+
+	switch a.Value.Kind() {
+	case slog.KindFloat64:
+		v := a.Value.Float64()
+		abs := math.Abs(v)
+		if abs == 0 || 1e-6 <= v && v < 1e21 {
+			b.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
+		} else {
+			b.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
+		}
+	case slog.KindDuration:
+		v := a.Value.Duration()
+		s := v.String()
+		if strings.HasSuffix(s, "m0s") {
+			s = s[:len(s)-2]
+		}
+		if strings.HasSuffix(s, "h0m") {
+			s = s[:len(s)-2]
+		}
+		b.WriteString(s)
+	case slog.KindTime:
+		v := a.Value.Time()
+		b.WriteString(v.Format(time.RFC3339Nano))
+	default:
+		b.WriteString(quote(a.Value.String()))
+	}
 }
 
 func (ih *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
