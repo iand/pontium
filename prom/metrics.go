@@ -65,11 +65,9 @@ func (p *PrometheusServer) Run(ctx context.Context) error {
 	return server.ListenAndServe()
 }
 
-func NewPrometheusCounter(appName string, name string, help string, labels map[string]string) (Counter, error) {
+func NewPrometheusCounter(name string, help string, labels map[string]string) (Counter, error) {
 	m := prometheus.NewCounter(
 		prometheus.CounterOpts{
-			Namespace:   "thunderdome",
-			Subsystem:   appName,
 			Name:        name,
 			Help:        help,
 			ConstLabels: labels,
@@ -85,11 +83,9 @@ func NewPrometheusCounter(appName string, name string, help string, labels map[s
 	return m, nil
 }
 
-func NewPrometheusGauge(appName string, name string, help string, labels map[string]string) (Gauge, error) {
+func NewPrometheusGauge(name string, help string, labels map[string]string) (Gauge, error) {
 	m := prometheus.NewGauge(
 		prometheus.GaugeOpts{
-			Namespace:   "thunderdome",
-			Subsystem:   appName,
 			Name:        name,
 			Help:        help,
 			ConstLabels: labels,
