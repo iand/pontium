@@ -105,11 +105,12 @@ func (ih *Handler) enabledForRecord(_ context.Context, r slog.Record) bool {
 			return true
 		}
 	}
-	r.Attrs(func(a slog.Attr) {
+	r.Attrs(func(a slog.Attr) bool {
 		if enabled {
-			return
+			return false
 		}
 		enabled = ih.attrHasMinLevel(a, r.Level)
+		return enabled
 	})
 	return enabled
 }
@@ -170,12 +171,13 @@ func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
 		}
 		ih.writeAttr(&b, a)
 	}
-	r.Attrs(func(a slog.Attr) {
+	r.Attrs(func(a slog.Attr) bool {
 		if ih.prefixName != nil && a.Key == *ih.prefixName {
 			prefix = a.Value.String()
-			return
+			return true
 		}
 		ih.writeAttr(&b, a)
+		return true
 	})
 
 	flatattrs := b.String()
