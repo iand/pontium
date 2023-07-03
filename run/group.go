@@ -15,6 +15,10 @@ type Runnable interface {
 	Run(context.Context) error
 }
 
+type RunnableFunc func(context.Context) error
+
+func (r RunnableFunc) Run(ctx context.Context) error { return r(ctx) }
+
 type Group struct {
 	runnables []Runnable
 }
