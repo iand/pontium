@@ -1,5 +1,5 @@
-//go:build go1.21
-// +build go1.21
+//go:build !go1.21
+// +build !go1.21
 
 package hlog
 
@@ -7,12 +7,13 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"log/slog"
 	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/exp/slog"
 )
 
 const (
