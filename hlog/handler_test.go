@@ -41,7 +41,7 @@ func TestHandler(t *testing.T) {
 }
 
 func parseLogLine(line string) (map[string]any, error) {
-	slvl, sline, ok := strings.Cut(string(line), "|")
+	slvl, sline, ok := strings.Cut(line, "|")
 	if !ok {
 		return nil, fmt.Errorf("failed to find level segment of log line")
 	}
@@ -60,7 +60,7 @@ func parseLogLine(line string) (map[string]any, error) {
 	}
 
 	var stime string
-	stime, sline, ok = strings.Cut(string(sline), "|")
+	stime, sline, ok = strings.Cut(sline, "|")
 	if !ok {
 		return nil, fmt.Errorf("failed to find time segment of log line")
 	}
@@ -74,12 +74,13 @@ func parseLogLine(line string) (map[string]any, error) {
 	m[slog.TimeKey] = ptime.AddDate(now.Year(), int(now.Month())-1, now.Day())
 
 	var msg string
-	msg, sline, ok = strings.Cut(string(sline), "|")
+	msg, sline, ok = strings.Cut(sline, "|")
 
 	m[slog.MessageKey] = strings.TrimSpace(msg)
 
 	_ = ptime
 	_ = sline
+	_ = ok
 
 	return m, nil
 }
