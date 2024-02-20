@@ -35,23 +35,24 @@ type Handler struct {
 	attrs      []slog.Attr
 	writer     io.Writer
 	prefixName *string
-	attrLevels map[string][]attrValueLevel
+	attrLevels map[string][]attrValueLevel // associates an attribute key with a value and a log level
 }
 
-func (ih *Handler) clone() *Handler {
-	ih2 := &Handler{
-		minLevel:   ih.minLevel,
-		nocolor:    ih.nocolor,
-		group:      ih.group,
-		prefixName: ih.prefixName,
+func (h *Handler) clone() *Handler {
+	h2 := &Handler{
+		minLevel:   h.minLevel,
+		nocolor:    h.nocolor,
+		group:      h.group,
+		prefixName: h.prefixName,
 		attrLevels: make(map[string][]attrValueLevel),
+		writer:     h.writer,
 	}
-	ih2.attrs = append(ih2.attrs, ih.attrs...)
-	for k, v := range ih.attrLevels {
-		ih2.attrLevels[k] = append(ih2.attrLevels[k], v...)
+	h2.attrs = append(h2.attrs, h.attrs...)
+	for k, v := range h.attrLevels {
+		h2.attrLevels[k] = append(h2.attrLevels[k], v...)
 	}
 
-	return ih2
+	return h2
 }
 
 type attrValueLevel struct {
@@ -59,60 +60,71 @@ type attrValueLevel struct {
 	level slog.Level
 }
 
-// WithLevel returns a handler with a minimum log level
-func (ih *Handler) WithLevel(level slog.Level) *Handler {
-	ih2 := ih.clone()
-	ih2.minLevel = level
-	return ih2
+// WithLevel returns a new Handler with a minimum log level set to level. The new
+// Handler is otherwise identical to the receiver.
+func (h *Handler) WithLevel(level slog.Level) *Handler {
+	h2 := h.clone()
+	h2.minLevel = level
+	return h2
 }
 
-// WithoutColor configures the handler to emit logs without using ANSI color directives.
-func (ih *Handler) WithoutColor() *Handler {
-	ih2 := ih.clone()
-	ih2.nocolor = true
-	return ih2
+// WithoutColor returns a new Handler that is configured to emit logs without using ANSI
+// color directives. The new Handler is otherwise identical to the receiver.
+func (h *Handler) WithoutColor() *Handler {
+	h2 := h.clone()
+	h2.nocolor = true
+	return h2
 }
 
-// WithPrefix designates an attribute that should be formatted as a prefix to the log message instead of being shown
-// as a standard attribute.
-func (ih *Handler) WithPrefix(name string) *Handler {
-	ih2 := ih.clone()
-	ih2.prefixName = &name
-	return ih2
+// WithPrefix returns a new Handler that designates the named attribute to be written as
+// a prefix to the log message instead of being shown alongide other attributes. The
+// new Handler is otherwise identical to the receiver. A Handler may only have one
+// attribute designated as a prefix.
+func (h *Handler) WithPrefix(name string) *Handler {
+	h2 := h.clone()
+	h2.prefixName = &name
+	return h2
 }
 
-func (ih *Handler) WithWriter(w io.Writer) *Handler {
-	ih2 := ih.clone()
-	ih2.writer = w
-	return ih2
+// WithWriter returns a new Handler that writes output to w. The new Handler is
+// otherwise identical to the receiver.
+func (h *Handler) WithWriter(w io.Writer) *Handler {
+	h2 := h.clone()
+	h2.writer = w
+	return h2
 }
 
-// WithAttrLevel associates a log level with an attribute key and value. Any log record with a matching attribute will
-// only be emitted if the record's level is greater or equal to the the given level
-func (ih *Handler) WithAttrLevel(a slog.Attr, level slog.Level) *Handler {
-	ih2 := ih.clone()
-	if ih2.attrLevels == nil {
-		ih2.attrLevels = make(map[string][]attrValueLevel)
+// WithAttrLevel returns a new Handler that associates a log level with an attribute key
+// and value. Any log record with a matching attribute will only be emitted if the
+// record's level is greater or equal to the the given level. For example this could be
+// used for controlling log levels by package name if the package is provided as an
+// attribute in each log record. The new Handler is otherwise identical to the
+// receiver.
+func (h *Handler) WithAttrLevel(a slog.Attr, level slog.Level) *Handler {
+	h2 := h.clone()
+	if h2.attrLevels == nil {
+		h2.attrLevels = make(map[string][]attrValueLevel)
 	}
 	// TODO: make sure unique?
-	ih2.attrLevels[a.Key] = append(ih2.attrLevels[a.Key], attrValueLevel{value: a.Value, level: level})
-	return ih2
+	h2.attrLevels[a.Key] = append(h2.attrLevels[a.Key], attrValueLevel{value: a.Value, level: level})
+	return h2
 }
 
-func (ih *Handler) Enabled(_ context.Context, level slog.Level) bool {
-	if len(ih.attrLevels) == 0 {
-		return level >= ih.minLevel
+// nabled reports whether the handler handles records at the given level.
+func (h *Handler) Enabled(_ context.Context, level slog.Level) bool {
+	if len(h.attrLevels) == 0 {
+		return level >= h.minLevel
 	}
 	return true
 }
 
-func (ih *Handler) enabledForRecord(_ context.Context, r slog.Record) bool {
-	if r.Level >= ih.minLevel {
+func (h *Handler) enabledForRecord(_ context.Context, r slog.Record) bool {
+	if r.Level >= h.minLevel {
 		return true
 	}
 	enabled := false
-	for _, a := range ih.attrs {
-		if ih.attrHasMinLevel(a, r.Level) {
+	for _, a := range h.attrs {
+		if h.attrHasMinLevel(a, r.Level) {
 			return true
 		}
 	}
@@ -120,14 +132,14 @@ func (ih *Handler) enabledForRecord(_ context.Context, r slog.Record) bool {
 		if enabled {
 			return false
 		}
-		enabled = ih.attrHasMinLevel(a, r.Level)
+		enabled = h.attrHasMinLevel(a, r.Level)
 		return enabled
 	})
 	return enabled
 }
 
-func (ih *Handler) attrHasMinLevel(a slog.Attr, level slog.Level) bool {
-	if vs, ok := ih.attrLevels[a.Key]; ok {
+func (h *Handler) attrHasMinLevel(a slog.Attr, level slog.Level) bool {
+	if vs, ok := h.attrLevels[a.Key]; ok {
 		for _, v := range vs {
 			if v.value.Equal(a.Value) {
 				if level >= v.level {
@@ -139,10 +151,10 @@ func (ih *Handler) attrHasMinLevel(a slog.Attr, level slog.Level) bool {
 	return false
 }
 
-func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
+func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	// Check whether we should log this record
-	if len(ih.attrLevels) > 0 {
-		if !ih.enabledForRecord(ctx, r) {
+	if len(h.attrLevels) > 0 {
+		if !h.enabledForRecord(ctx, r) {
 			return nil
 		}
 	}
@@ -161,7 +173,7 @@ func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
 		kind = fmt.Sprintf("%02d", r.Level)
 	}
 
-	if !ih.nocolor {
+	if !h.nocolor {
 		if r.Level >= slog.LevelError {
 			kind = fmt.Sprintf("%s%-5s%s", colorRed, kind, colorReset)
 		} else if r.Level >= slog.LevelWarn {
@@ -176,18 +188,27 @@ func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
 	prefix := ""
 
 	var b strings.Builder
-	for _, a := range ih.attrs {
-		if ih.prefixName != nil && a.Key == *ih.prefixName {
+	for _, a := range h.attrs {
+		// Ignore empty attrs
+		if a.Equal(slog.Attr{}) {
+			continue
+		}
+
+		if h.prefixName != nil && a.Key == *h.prefixName {
 			prefix = a.Value.String()
 		}
-		ih.writeAttr(&b, a)
+		h.writeAttr(&b, a)
 	}
 	r.Attrs(func(a slog.Attr) bool {
-		if ih.prefixName != nil && a.Key == *ih.prefixName {
+		// Ignore empty attrs
+		if a.Equal(slog.Attr{}) {
+			return true
+		}
+		if h.prefixName != nil && a.Key == *h.prefixName {
 			prefix = a.Value.String()
 			return true
 		}
-		ih.writeAttr(&b, a)
+		h.writeAttr(&b, a)
 		return true
 	})
 
@@ -197,7 +218,7 @@ func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
 		msg = prefix + ": " + msg
 	}
 
-	w := ih.writer
+	w := h.writer
 	if w == nil {
 		w = os.Stdout
 	}
@@ -206,20 +227,21 @@ func (ih *Handler) Handle(ctx context.Context, r slog.Record) error {
 	return nil
 }
 
-func (ih *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
+func (h *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
 	b.WriteString(" ")
-	if !ih.nocolor {
+	if !h.nocolor {
 		b.WriteString(colorBlue)
 	}
 	b.WriteString(a.Key)
-	if !ih.nocolor {
+	if !h.nocolor {
 		b.WriteString(colorReset)
 	}
 	b.WriteString("=")
 
-	switch a.Value.Kind() {
+	rv := a.Value.Resolve()
+	switch rv.Kind() {
 	case slog.KindFloat64:
-		v := a.Value.Float64()
+		v := rv.Float64()
 		abs := math.Abs(v)
 		if abs == 0 || 1e-6 <= v && v < 1e21 {
 			b.WriteString(strconv.FormatFloat(v, 'f', -1, 64))
@@ -227,7 +249,7 @@ func (ih *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
 			b.WriteString(strconv.FormatFloat(v, 'g', -1, 64))
 		}
 	case slog.KindDuration:
-		v := a.Value.Duration()
+		v := rv.Duration()
 		s := v.String()
 		if strings.HasSuffix(s, "m0s") {
 			s = s[:len(s)-2]
@@ -237,24 +259,23 @@ func (ih *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
 		}
 		b.WriteString(s)
 	case slog.KindTime:
-		v := a.Value.Time()
+		v := rv.Time()
 		b.WriteString(v.Format(time.RFC3339Nano))
 	default:
-		b.WriteString(quote(a.Value.String()))
+		b.WriteString(quote(rv.String()))
 	}
 }
 
-func (ih *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
-	ih2 := ih.clone()
-	ih2.attrs = append(ih2.attrs, attrs...)
-	return ih2
+func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
+	h2 := h.clone()
+	h2.attrs = append(h2.attrs, attrs...)
+	return h2
 }
 
-// WithGroup not supported
-func (ih *Handler) WithGroup(name string) slog.Handler {
-	ih2 := ih.clone()
-	ih2.group = name
-	return ih2
+func (h *Handler) WithGroup(name string) slog.Handler {
+	h2 := h.clone()
+	h2.group = name
+	return h2
 }
 
 func quote(s string) string {
