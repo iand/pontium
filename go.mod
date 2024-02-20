@@ -1,6 +1,8 @@
 module github.com/iand/pontium
 
-go 1.21
+go 1.22
+
+toolchain go1.22.0
 
 require (
 	contrib.go.opencensus.io/exporter/prometheus v0.4.2
