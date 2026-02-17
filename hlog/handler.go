@@ -31,7 +31,7 @@ var _ slog.Handler = (*Handler)(nil)
 type Handler struct {
 	minLevel   slog.Level
 	nocolor    bool
-	group      string
+	groups     []string
 	attrs      []slog.Attr
 	writer     io.Writer
 	prefixName *string
@@ -42,7 +42,7 @@ func (h *Handler) clone() *Handler {
 	h2 := &Handler{
 		minLevel:   h.minLevel,
 		nocolor:    h.nocolor,
-		group:      h.group,
+		groups:     append([]string{}, h.groups...),
 		prefixName: h.prefixName,
 		attrLevels: make(map[string][]attrValueLevel),
 		writer:     h.writer,
@@ -199,16 +199,18 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		}
 		h.writeAttr(&b, a)
 	}
+	gp := h.groupPrefix()
 	r.Attrs(func(a slog.Attr) bool {
-		// Ignore empty attrs
-		if a.Equal(slog.Attr{}) {
-			return true
+		for _, fa := range flattenAttr(gp, a) {
+			if fa.Equal(slog.Attr{}) {
+				continue
+			}
+			if h.prefixName != nil && fa.Key == *h.prefixName {
+				prefix = fa.Value.String()
+				continue
+			}
+			h.writeAttr(&b, fa)
 		}
-		if h.prefixName != nil && a.Key == *h.prefixName {
-			prefix = a.Value.String()
-			return true
-		}
-		h.writeAttr(&b, a)
 		return true
 	})
 
@@ -222,7 +224,13 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 	if w == nil {
 		w = os.Stdout
 	}
-	fmt.Fprintf(w, "%s | %15s | %-40s %s\n", kind, r.Time.Format("15:04:05.000000"), msg, flatattrs)
+
+	timeStr := r.Time.Format("15:04:05.000000")
+	if r.Time.IsZero() {
+		timeStr = ""
+	}
+
+	fmt.Fprintf(w, "%s | %15s | %-40s %s\n", kind, timeStr, msg, flatattrs)
 
 	return nil
 }
@@ -266,15 +274,48 @@ func (h *Handler) writeAttr(b *strings.Builder, a slog.Attr) {
 	}
 }
 
+func (h *Handler) groupPrefix() string {
+	if len(h.groups) == 0 {
+		return ""
+	}
+	return strings.Join(h.groups, ".") + "."
+}
+
+func flattenAttr(prefix string, a slog.Attr) []slog.Attr {
+	a.Value = a.Value.Resolve()
+	if a.Value.Kind() == slog.KindGroup {
+		gp := prefix
+		if a.Key != "" {
+			gp = prefix + a.Key + "."
+		}
+		var result []slog.Attr
+		for _, sa := range a.Value.Group() {
+			result = append(result, flattenAttr(gp, sa)...)
+		}
+		return result
+	}
+	if a.Equal(slog.Attr{}) {
+		return nil
+	}
+	a.Key = prefix + a.Key
+	return []slog.Attr{a}
+}
+
 func (h *Handler) WithAttrs(attrs []slog.Attr) slog.Handler {
 	h2 := h.clone()
-	h2.attrs = append(h2.attrs, attrs...)
+	gp := h.groupPrefix()
+	for _, a := range attrs {
+		h2.attrs = append(h2.attrs, flattenAttr(gp, a)...)
+	}
 	return h2
 }
 
 func (h *Handler) WithGroup(name string) slog.Handler {
+	if name == "" {
+		return h
+	}
 	h2 := h.clone()
-	h2.group = name
+	h2.groups = append(h2.groups, name)
 	return h2
 }
 
