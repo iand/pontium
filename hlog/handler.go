@@ -10,6 +10,8 @@ import (
 	"log/slog"
 	"math"
 	"os"
+	"path"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -31,6 +33,7 @@ var _ slog.Handler = (*Handler)(nil)
 type Handler struct {
 	minLevel   slog.Level
 	nocolor    bool
+	source     bool
 	groups     []string
 	attrs      []slog.Attr
 	writer     io.Writer
@@ -42,6 +45,7 @@ func (h *Handler) clone() *Handler {
 	h2 := &Handler{
 		minLevel:   h.minLevel,
 		nocolor:    h.nocolor,
+		source:     h.source,
 		groups:     append([]string{}, h.groups...),
 		prefixName: h.prefixName,
 		attrLevels: make(map[string][]attrValueLevel),
@@ -91,6 +95,14 @@ func (h *Handler) WithPrefix(name string) *Handler {
 func (h *Handler) WithWriter(w io.Writer) *Handler {
 	h2 := h.clone()
 	h2.writer = w
+	return h2
+}
+
+// WithSource returns a new Handler that includes the source filename and line number in
+// each log line. The new Handler is otherwise identical to the receiver.
+func (h *Handler) WithSource() *Handler {
+	h2 := h.clone()
+	h2.source = true
 	return h2
 }
 
@@ -230,7 +242,14 @@ func (h *Handler) Handle(ctx context.Context, r slog.Record) error {
 		timeStr = ""
 	}
 
-	fmt.Fprintf(w, "%s | %15s | %-40s %s\n", kind, timeStr, msg, flatattrs)
+	if h.source && r.PC != 0 {
+		frames := runtime.CallersFrames([]uintptr{r.PC})
+		f, _ := frames.Next()
+		sourceStr := path.Base(f.File) + ":" + strconv.Itoa(f.Line)
+		fmt.Fprintf(w, "%s | %15s | %-20s | %-40s %s\n", kind, timeStr, sourceStr, msg, flatattrs)
+	} else {
+		fmt.Fprintf(w, "%s | %15s | %-40s %s\n", kind, timeStr, msg, flatattrs)
+	}
 
 	return nil
 }

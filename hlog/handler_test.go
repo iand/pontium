@@ -8,6 +8,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
@@ -110,6 +111,28 @@ func TestHandlerOutput(t *testing.T) {
 				t.Errorf("output mismatch\ngot:  %q\nwant: %q", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestHandlerWithSource(t *testing.T) {
+	ts := time.Date(2024, 1, 15, 10, 30, 45, 123456000, time.UTC)
+
+	var buf bytes.Buffer
+	h := new(Handler).WithoutColor().WithSource().WithWriter(&buf)
+
+	var pcs [1]uintptr
+	runtime.Callers(1, pcs[:])
+	r := slog.NewRecord(ts, slog.LevelInfo, "sourced message", pcs[0])
+	if err := h.Handle(context.Background(), r); err != nil {
+		t.Fatal(err)
+	}
+
+	got := buf.String()
+	if !strings.Contains(got, "handler_test.go:") {
+		t.Errorf("expected output to contain source location, got: %q", got)
+	}
+	if !strings.Contains(got, "sourced message") {
+		t.Errorf("expected output to contain message, got: %q", got)
 	}
 }
 
