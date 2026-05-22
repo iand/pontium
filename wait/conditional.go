@@ -35,7 +35,7 @@ func Until(ctx context.Context, condition func(context.Context) (bool, error), d
 }
 
 // Forever repeatedly calls fn until it returns an error or until the context is cancelled.
-// It retuns any error returned from fn or the cancelled context.
+// It returns any error returned from fn or the cancelled context.
 // delay specifies the length of time to wait before calling fn for the first time.
 // interval specifies the length of time to wait between subsequent calls to fn.
 // j adds jitter to delay and interval. See the documentation for JitterDuration for how j is interpreted.
